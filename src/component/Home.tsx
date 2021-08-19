@@ -83,6 +83,11 @@ const Home = () => {
       console.log('new user logged in!')
       checkOnlineUsers()
     })
+
+    return () => {
+      // componentWillUnmount
+      socket.disconnect()
+    }
   }, [])
 
   // client connects to the server
@@ -96,6 +101,9 @@ const Home = () => {
   // on the client we also set a 'message' event listener to capture the event emitted from the server
   // if triggered, this event listener takes the message out of the payload and adds it to its
   // chatHistory array
+  // when a user disconnects, the backend will update the user list removing him/her
+  // and will emit a newConnection event for letting all the other clients know that they should
+  // fetch the users list once again to keep their connected clients list up-to-date
 
   return (
     <Container fluid>
