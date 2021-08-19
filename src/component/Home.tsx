@@ -2,6 +2,7 @@ import { Col, Container, Form, Row } from 'react-bootstrap'
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react'
 import Message from '../types/Message'
 import { io } from 'socket.io-client'
+import User from '../types/User'
 
 // io is taking two arguments: the ADDRESS of the server and a config object
 const ADDRESS = 'http://localhost:3030'
@@ -19,6 +20,7 @@ const Home = () => {
   const [message, setMessage] = useState('')
 
   const [loggedin, setLoggedin] = useState(false)
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([])
 
   const handleUsername = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -31,7 +33,28 @@ const Home = () => {
 
   const handleMessage = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    console.log('sending new message...')
+    if (loggedin) {
+      console.log('sending new message...')
+      const newMessage = {
+        text: message,
+        sender: username,
+        timestamp: Date.now(),
+        id: socket.id,
+      }
+      socket.emit('sendmessage', newMessage)
+      setChatHistory([...chatHistory, newMessage])
+      setMessage('')
+    }
+  }
+
+  const checkOnlineUsers = async () => {
+    try {
+      const response = await fetch(ADDRESS + '/online-users')
+      const data = await response.json()
+      setOnlineUsers(data.onlineUsers as User[])
+    } catch (error) {
+      console.log(error)
+    }
   }
 
   useEffect(() => {
@@ -47,6 +70,18 @@ const Home = () => {
       // username was saved correctly on the server, now we're allowed to send messages!
       console.log('Successfully logged in!')
       setLoggedin(true)
+      checkOnlineUsers()
+      socket.on('message', (message: Message) => {
+        console.log('a new message was received!')
+        // this is for ALL THE CLIENTS EXCEPT the one who emitted the message
+        setChatHistory([...chatHistory, message])
+      })
+    })
+
+    socket.on('newConnection', () => {
+      // oh, a new user logged in! let's fetch the online-user route again!
+      console.log('new user logged in!')
+      checkOnlineUsers()
     })
   }, [])
 
@@ -55,6 +90,12 @@ const Home = () => {
   // now the client is able to send its username
   // the server accepts it and emit back a "loggedin" event
   // the client listens for it, and now it's ready to send messages!
+  // for sending a message, a client emits an event called 'sendmessage' with the message
+  // object as the payload, and also adds it to its chatHistory array
+  // the server receives it and bounces it back to all the other clients connected
+  // on the client we also set a 'message' event listener to capture the event emitted from the server
+  // if triggered, this event listener takes the message out of the payload and adds it to its
+  // chatHistory array
 
   return (
     <Container fluid>
@@ -91,7 +132,12 @@ const Home = () => {
           </Form>
         </Col>
         <Col md={2} style={{ borderLeft: '2px solid black' }}>
-          <div>CONNECTED USERS GO HERE!</div>
+          <div>Connected users</div>
+          <ul>
+            {onlineUsers.map((user) => (
+              <li key={user.id}>{user.username}</li>
+            ))}
+          </ul>
         </Col>
       </Row>
     </Container>
